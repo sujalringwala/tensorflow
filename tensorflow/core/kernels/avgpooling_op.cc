@@ -39,7 +39,6 @@ limitations under the License.
 #if GOOGLE_CUDA
 #include "tensorflow/core/kernels/maxpooling_op_gpu.h"
 #include "tensorflow/core/kernels/pooling_ops_common_gpu.h"
-#include "tensorflow/core/util/use_cudnn.h"
 #endif  // GOOGLE_CUDA
 
 namespace tensorflow {
@@ -57,7 +56,9 @@ class AvgPoolingOp : public UnaryOp<T> {
                 errors::InvalidArgument("Invalid data format"));
     OP_REQUIRES(
         context, data_format_ == FORMAT_NHWC,
-        errors::InvalidArgument("Default AvgPoolingOp only supports NHWC."));
+        errors::InvalidArgument("Default AvgPoolingOp only supports NHWC ",
+                                "on device type ",
+                                DeviceTypeString(context->device_type())));
     OP_REQUIRES_OK(context, context->GetAttr("ksize", &ksize_));
     OP_REQUIRES(context, ksize_.size() == 4,
                 errors::InvalidArgument("Sliding window ksize field must "
@@ -101,6 +102,9 @@ class AvgPoolingOp : public UnaryOp<T> {
   TensorFormat data_format_;
 };
 
+REGISTER_KERNEL_BUILDER(
+    Name("AvgPool").Device(DEVICE_CPU).TypeConstraint<double>("T"),
+    AvgPoolingOp<CPUDevice, double>);
 REGISTER_KERNEL_BUILDER(
     Name("AvgPool").Device(DEVICE_CPU).TypeConstraint<float>("T"),
     AvgPoolingOp<CPUDevice, float>);
@@ -151,11 +155,14 @@ class AvgPoolingOp<GPUDevice, T> : public UnaryOp<T> {
 
     TensorShape output_shape = params.forward_output_shape();
 
-    if (internal::AvgPoolUseCudnn() || data_format_ == FORMAT_NCHW) {
+    if (data_format_ == FORMAT_NCHW) {
+      LOG(INFO) << "DnnPoolingOp";
       DnnPoolingOp<T>::Compute(
           context, perftools::gputools::dnn::PoolingMode::kAverage, ksize_,
-          stride_, padding_, data_format_, tensor_in, output_shape);
+          stride_, padding_, data_format_, tensor_in, output_shape,
+          /*propagate_nans=*/false);
     } else {
+      LOG(INFO) << "SpatialAvgPooling";
       Tensor* output = nullptr;
       OP_REQUIRES_OK(context,
                      context->allocate_output(0, output_shape, &output));
@@ -187,6 +194,7 @@ namespace functor {
 
 DECLARE_GPU_SPEC(Eigen::half);
 DECLARE_GPU_SPEC(float);
+DECLARE_GPU_SPEC(double);
 #undef DECLARE_GPU_SPEC
 }  // namespace functor
 
@@ -196,6 +204,9 @@ REGISTER_KERNEL_BUILDER(
 REGISTER_KERNEL_BUILDER(
     Name("AvgPool").Device(DEVICE_GPU).TypeConstraint<float>("T"),
     AvgPoolingOp<GPUDevice, float>);
+REGISTER_KERNEL_BUILDER(
+    Name("AvgPool").Device(DEVICE_GPU).TypeConstraint<double>("T"),
+    AvgPoolingOp<GPUDevice, double>);
 #endif  // GOOGLE_CUDA
 
 // The operation to compute AvgPool gradients.
@@ -211,9 +222,11 @@ class AvgPoolingGradOp : public OpKernel {
     OP_REQUIRES_OK(context, context->GetAttr("data_format", &data_format));
     OP_REQUIRES(context, FormatFromString(data_format, &data_format_),
                 errors::InvalidArgument("Invalid data format"));
-    OP_REQUIRES(context, data_format_ == FORMAT_NHWC,
-                errors::InvalidArgument(
-                    "Default AvgPoolingGradOp only supports NHWC."));
+    OP_REQUIRES(
+        context, data_format_ == FORMAT_NHWC,
+        errors::InvalidArgument("Default AvgPoolingGradOp only supports NHWC ",
+                                "on device type ",
+                                DeviceTypeString(context->device_type())));
     OP_REQUIRES_OK(context, context->GetAttr("ksize", &ksize_));
     OP_REQUIRES(context, ksize_.size() == 4,
                 errors::InvalidArgument("Sliding window ksize field must "
@@ -409,7 +422,7 @@ class AvgPoolingGradOp<GPUDevice, T> : public OpKernel {
     DnnPoolingGradOp<T>::Compute(
         context, perftools::gputools::dnn::PoolingMode::kAverage, ksize_,
         stride_, padding_, data_format_, nullptr, nullptr, out_backprop,
-        output_shape);
+        output_shape, /*propagate_nans=*/false);
   }
 
  private:
@@ -419,6 +432,12 @@ class AvgPoolingGradOp<GPUDevice, T> : public OpKernel {
   TensorFormat data_format_;
 };
 
+REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
+                            .Device(DEVICE_GPU)
+                            .TypeConstraint<double>("T")
+                            .HostMemory("orig_input_shape")
+                            .Label("cudnn"),
+                        AvgPoolingGradOp<GPUDevice, double>);
 REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<float>("T")
@@ -533,7 +552,7 @@ class AvgPoolingGradOpCustomGPUKernel : public OpKernel {
       DnnPoolingGradOp<T>::Compute(
           context, perftools::gputools::dnn::PoolingMode::kAverage, ksize_,
           stride_, padding_, data_format_, nullptr, nullptr, out_backprop,
-          output_shape);
+          output_shape, /*propagate_nans=*/false);
     }
   }
 
@@ -549,6 +568,11 @@ REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
                             .TypeConstraint<float>("T")
                             .HostMemory("orig_input_shape"),
                         AvgPoolingGradOpCustomGPUKernel<float>);
+REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
+                            .Device(DEVICE_GPU)
+                            .TypeConstraint<double>("T")
+                            .HostMemory("orig_input_shape"),
+                        AvgPoolingGradOpCustomGPUKernel<double>);
 REGISTER_KERNEL_BUILDER(Name("AvgPoolGrad")
                             .Device(DEVICE_GPU)
                             .TypeConstraint<Eigen::half>("T")

@@ -32,6 +32,7 @@ from tensorflow.python.platform import tf_logging
 from tensorflow.python.saved_model import constants
 from tensorflow.python.training import saver as tf_saver
 from tensorflow.python.util import compat
+from tensorflow.python.util.tf_export import tf_export
 
 
 def _parse_saved_model(export_dir):
@@ -156,6 +157,7 @@ def _get_legacy_init_op_tensor(meta_graph_def_to_load):
   return legacy_init_op_tensor
 
 
+@tf_export("saved_model.loader.maybe_saved_model_directory")
 def maybe_saved_model_directory(export_dir):
   """Checks whether the provided export directory could contain a SavedModel.
 
@@ -176,6 +178,7 @@ def maybe_saved_model_directory(export_dir):
   return file_io.file_exists(txt_path) or file_io.file_exists(pb_path)
 
 
+@tf_export("saved_model.loader.load")
 def load(sess, tags, export_dir, **saver_kwargs):
   """Loads the model from a SavedModel as specified by tags.
 
@@ -195,46 +198,47 @@ def load(sess, tags, export_dir, **saver_kwargs):
   Raises:
     RuntimeError: MetaGraphDef associated with the tags cannot be found.
   """
-  # Build the SavedModel protocol buffer and find the requested meta graph def.
-  saved_model = _parse_saved_model(export_dir)
-  found_match = False
-  for meta_graph_def in saved_model.meta_graphs:
-    if set(meta_graph_def.meta_info_def.tags) == set(tags):
-      meta_graph_def_to_load = meta_graph_def
-      found_match = True
-      break
+  with sess.graph.as_default():
+    # Build the SavedModel protocol buffer and find requested meta graph def.
+    saved_model = _parse_saved_model(export_dir)
+    found_match = False
+    for meta_graph_def in saved_model.meta_graphs:
+      if set(meta_graph_def.meta_info_def.tags) == set(tags):
+        meta_graph_def_to_load = meta_graph_def
+        found_match = True
+        break
 
-  if not found_match:
-    raise RuntimeError("MetaGraphDef associated with tags " + str(tags).strip(
-        "[]") + " could not be found in SavedModel")
+    if not found_match:
+      raise RuntimeError(
+          "MetaGraphDef associated with tags " + str(tags).strip("[]") +
+          " could not be found in SavedModel. To inspect available tag-sets in"
+          " the SavedModel, please use the SavedModel CLI: `saved_model_cli`"
+      )
 
-  # Build a saver by importing the meta graph def to load.
-  saver = tf_saver.import_meta_graph(meta_graph_def_to_load, **saver_kwargs)
+    # Build a saver by importing the meta graph def to load.
+    saver = tf_saver.import_meta_graph(meta_graph_def_to_load, **saver_kwargs)
 
-  if saver:
-    # Build the checkpoint path where the variables are located.
-    variables_path = os.path.join(
-        compat.as_bytes(export_dir),
-        compat.as_bytes(constants.VARIABLES_DIRECTORY),
-        compat.as_bytes(constants.VARIABLES_FILENAME))
+    if saver:
+      # Build the checkpoint path where the variables are located.
+      variables_path = os.path.join(
+          compat.as_bytes(export_dir),
+          compat.as_bytes(constants.VARIABLES_DIRECTORY),
+          compat.as_bytes(constants.VARIABLES_FILENAME))
 
-    # Restore the variables using the built saver in the provided session.
-    saver.restore(sess, variables_path)
-  else:
-    tf_logging.info("The specified SavedModel has no variables; no "
-                    "checkpoints were restored.")
+      # Restore the variables using the built saver in the provided session.
+      saver.restore(sess, variables_path)
+    else:
+      tf_logging.info("The specified SavedModel has no variables; no "
+                      "checkpoints were restored.")
 
-  # Get asset tensors, if any.
-  asset_tensors_dictionary = _get_asset_tensors(export_dir,
-                                                meta_graph_def_to_load)
+    # Get asset tensors, if any.
+    asset_tensors_dictionary = _get_asset_tensors(export_dir,
+                                                  meta_graph_def_to_load)
 
-  main_op_tensor = _get_main_op_tensor(meta_graph_def_to_load)
-  if main_op_tensor is not None:
-    sess.run(fetches=[main_op_tensor], feed_dict=asset_tensors_dictionary)
-  else:
-    legacy_init_op_tensor = _get_legacy_init_op_tensor(meta_graph_def_to_load)
-    if legacy_init_op_tensor is not None:
-      sess.run(fetches=[legacy_init_op_tensor],
-               feed_dict=asset_tensors_dictionary)
+    main_op_tensor = (
+        _get_main_op_tensor(meta_graph_def_to_load) or
+        (_get_legacy_init_op_tensor(meta_graph_def_to_load)))
+    if main_op_tensor is not None:
+      sess.run(fetches=[main_op_tensor], feed_dict=asset_tensors_dictionary)
 
-  return meta_graph_def_to_load
+    return meta_graph_def_to_load

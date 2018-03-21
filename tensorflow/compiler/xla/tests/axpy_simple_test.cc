@@ -17,7 +17,6 @@ limitations under the License.
 
 #include "tensorflow/compiler/xla/client/computation_builder.h"
 #include "tensorflow/compiler/xla/client/local_client.h"
-#include "tensorflow/compiler/xla/legacy_flags/cpu_compiler_flags.h"
 #include "tensorflow/compiler/xla/tests/client_library_test_base.h"
 #include "tensorflow/compiler/xla/tests/literal_test_util.h"
 #include "tensorflow/compiler/xla/tests/test_macros.h"
@@ -63,6 +62,10 @@ TEST_F(AxpySimpleTest, AxpyTenValues) {
   auto ax = builder.Mul(alpha, x);
   auto axpy = builder.Add(ax, y);
 
+  TF_ASSERT_OK_AND_ASSIGN(ProgramShape shape, builder.GetProgramShape());
+
+  EXPECT_EQ("() -> f32[10]", ShapeUtil::HumanString(shape));
+
   std::vector<float> expected = {
       1.85840735, -1.85840735, 2.28318531,   -2.28318531,  -6.42477796,
       6.42477796, 10.56637061, -10.56637061, -14.70796327, 14.70796327};
@@ -71,20 +74,3 @@ TEST_F(AxpySimpleTest, AxpyTenValues) {
 
 }  // namespace
 }  // namespace xla
-
-int main(int argc, char** argv) {
-  std::vector<tensorflow::Flag> flag_list;
-  xla::legacy_flags::AppendCpuCompilerFlags(&flag_list);
-  xla::string usage = tensorflow::Flags::Usage(argv[0], flag_list);
-  const bool parse_result = tensorflow::Flags::Parse(&argc, argv, flag_list);
-  if (!parse_result) {
-    LOG(ERROR) << "\n" << usage;
-    return 2;
-  }
-  testing::InitGoogleTest(&argc, argv);
-  if (argc > 1) {
-    LOG(ERROR) << "Unknown argument " << argv[1] << "\n" << usage;
-    return 2;
-  }
-  return RUN_ALL_TESTS();
-}

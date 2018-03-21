@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef THIRD_PARTY_TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_
-#define THIRD_PARTY_TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_
+#ifndef TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_
+#define TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_
 
 #include "tensorflow/core/framework/remote_fused_graph_execute_info.pb.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -25,10 +25,7 @@ namespace tensorflow {
 
 class IRemoteFusedGraphExecutor {
  public:
-  using ByteArray =
-      std::tuple<uint8* /* data */, uint64 /* size */, DataType /* type */>;
-  using ConstByteArray = std::tuple<const uint8* /* data */, uint64 /* size */,
-                                    DataType /* type */>;
+  using TensorAllocatorFunc = std::function<Tensor*(const TensorShape& shape)>;
 
   IRemoteFusedGraphExecutor() = default;
   virtual ~IRemoteFusedGraphExecutor() = default;
@@ -55,16 +52,19 @@ class IRemoteFusedGraphExecutor {
   // Teardown Graph
   virtual bool TeardownGraph() = 0;
 
-  // Fill input node's output with a ByteArray
-  virtual bool FillInputNode(const string& node_name,
-                             const ConstByteArray bytes) = 0;
-
   // Fill input node's output with Tensor
   virtual bool FillInputNode(const string& node_name, const Tensor& tensor) = 0;
 
   // Read output node's outputs as ByteArrays
-  virtual bool ReadOutputNode(string node_name,
-                              std::vector<ByteArray>* outputs) = 0;
+  virtual bool ReadOutputNode(const string& node_name,
+                              TensorAllocatorFunc tensor_allocator) = 0;
+
+  virtual Status FuseRemoteGraph(const GraphDef& original_graph_def,
+                                 const std::vector<string>& inputs,
+                                 const std::vector<string>& outputs,
+                                 GraphDef* fused_graph_def) = 0;
+
+  virtual bool IsEnabled() const = 0;
 
  private:
   TF_DISALLOW_COPY_AND_ASSIGN(IRemoteFusedGraphExecutor);
@@ -72,4 +72,4 @@ class IRemoteFusedGraphExecutor {
 
 }  // namespace tensorflow
 
-#endif  // THIRD_PARTY_TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_
+#endif  // TENSORFLOW_CORE_KERNELS_I_REMOTE_GRAPH_EXECUTOR_H_

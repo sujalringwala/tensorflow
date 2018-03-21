@@ -58,6 +58,7 @@ class Master {
   void ListDevices(const ListDevicesRequest* req, ListDevicesResponse* resp,
                    MyClosure done);
 
+  // See tensorflow::Reset() and the comment on ResetRequest.
   void Reset(const ResetRequest* req, ResetResponse* resp, MyClosure done);
 
  private:
@@ -92,6 +93,10 @@ class Master {
 
   // Cleanup unused session.
   void GC();
+
+  // Find master session by session handle, and increments the reference count
+  // on the returned MasterSession if not null.
+  MasterSession* FindMasterSession(const string& handle);
 
   TF_DISALLOW_COPY_AND_ASSIGN(Master);
 };

@@ -59,6 +59,11 @@ mathematical functions to your graph.
 *   @{tf.acos}
 *   @{tf.asin}
 *   @{tf.atan}
+*   @{tf.cosh}
+*   @{tf.sinh}
+*   @{tf.asinh}
+*   @{tf.acosh}
+*   @{tf.atanh}
 *   @{tf.lgamma}
 *   @{tf.digamma}
 *   @{tf.erf}
@@ -117,19 +122,9 @@ functions to your graph.
 *   @{tf.complex}
 *   @{tf.conj}
 *   @{tf.imag}
+*   @{tf.angle}
 *   @{tf.real}
 
-## Fourier Transform Functions
-
-TensorFlow provides several operations that you can use to add discrete
-Fourier transform functions to your graph.
-
-*   @{tf.fft}
-*   @{tf.ifft}
-*   @{tf.fft2d}
-*   @{tf.ifft2d}
-*   @{tf.fft3d}
-*   @{tf.ifft3d}
 
 ## Reduction
 

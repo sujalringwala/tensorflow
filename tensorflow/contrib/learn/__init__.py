@@ -13,8 +13,11 @@
 # limitations under the License.
 # ==============================================================================
 
-# TODO(ptucker,ipolosukhin): Improve descriptions.
-"""High level API for learning.
+"""High level API for learning (DEPRECATED).
+
+This module and all its submodules are deprecated. See
+[contrib/learn/README.md](https://www.tensorflow.org/code/tensorflow/contrib/learn/README.md)
+for migration instructions.
 
 See the @{$python/contrib.learn} guide.
 
@@ -28,12 +31,28 @@ See the @{$python/contrib.learn} guide.
 @@MetricSpec
 @@PredictionKey
 @@DNNClassifier
+@@DNNEstimator
 @@DNNRegressor
 @@DNNLinearCombinedRegressor
+@@DNNLinearCombinedEstimator
 @@DNNLinearCombinedClassifier
+@@DynamicRnnEstimator
 @@LinearClassifier
+@@LinearEstimator
 @@LinearRegressor
 @@LogisticRegressor
+@@StateSavingRnnEstimator
+@@SVM
+@@SKCompat
+
+@@Head
+@@multi_class_head
+@@multi_label_head
+@@binary_svm_head
+@@regression_head
+@@poisson_regression_head
+@@multi_head
+@@no_op_train_fn
 
 @@Experiment
 @@ExportStrategy
@@ -57,6 +76,10 @@ See the @{$python/contrib.learn} guide.
 @@read_batch_examples
 @@read_batch_features
 @@read_batch_record_features
+@@read_keyed_batch_examples
+@@read_keyed_batch_examples_shared_queue
+@@read_keyed_batch_features
+@@read_keyed_batch_features_shared_queue
 
 @@InputFnOps
 @@ProblemType
@@ -72,9 +95,11 @@ from __future__ import print_function
 from tensorflow.contrib.learn.python.learn import *
 # pylint: enable=wildcard-import
 
+from tensorflow.contrib.learn.python.learn import learn_runner_lib as learn_runner
+
 from tensorflow.python.util.all_util import remove_undocumented
 
-_allowed_symbols = ['datasets', 'head', 'io', 'models',
+_allowed_symbols = ['datasets', 'head', 'io', 'learn_runner', 'models',
                     'monitors', 'NotFittedError', 'ops', 'preprocessing',
                     'utils', 'graph_actions']
 

@@ -18,68 +18,41 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import argparse
-import inspect
 import os
 import sys
 
 import tensorflow as tf
 
 from tensorflow.python import debug as tf_debug
+from tensorflow.python.util import tf_inspect
 from tensorflow.tools.docs import generate_lib
 
-
 if __name__ == '__main__':
-  argument_parser = argparse.ArgumentParser()
-  argument_parser.add_argument(
-      '--output_dir',
-      type=str,
-      default=None,
-      required=True,
-      help='Directory to write docs to.'
-  )
-
-  argument_parser.add_argument(
-      '--src_dir',
-      type=str,
-      default=None,
-      required=True,
-      help='Directory with the source docs.'
-  )
+  doc_generator = generate_lib.DocGenerator()
+  doc_generator.add_output_dir_argument()
+  doc_generator.add_src_dir_argument()
 
   # This doc generator works on the TensorFlow codebase. Since this script lives
   # at tensorflow/tools/docs, and all code is defined somewhere inside
   # tensorflow/, we can compute the base directory (two levels up), which is
   # valid unless we're trying to apply this to a different code base, or are
   # moving the script around.
-  script_dir = os.path.dirname(inspect.getfile(inspect.currentframe()))
+  script_dir = os.path.dirname(tf_inspect.getfile(tf_inspect.currentframe()))
   default_base_dir = os.path.join(script_dir, '..', '..')
+  doc_generator.add_base_dir_argument(default_base_dir)
 
-  argument_parser.add_argument(
-      '--base_dir',
-      type=str,
-      default=default_base_dir,
-      help=('Base directory to to strip from file names referenced in docs. '
-            'Defaults to two directories up from the location of this file.')
-  )
-
-  flags, _ = argument_parser.parse_known_args()
+  flags = doc_generator.parse_known_args()
 
   # tf_debug is not imported with tf, it's a separate module altogether
-  modules = [('tf', tf), ('tfdbg', tf_debug)]
+  doc_generator.set_py_modules([('tf', tf), ('tfdbg', tf_debug)])
 
-  # Access something in contrib so tf.contrib is properly loaded (it's hidden
-  # behind lazy loading)
-  _ = tf.contrib.__name__
-
-  generate_lib.do_not_descend_map = {
-      '': ['cli', 'lib', 'wrappers'],
-      'contrib': [
+  doc_generator.set_do_not_descend_map({
+      'tf': ['cli', 'lib', 'wrappers'],
+      'tf.contrib': [
           'compiler',
           'factorization',
           'grid_rnn',
           'labeled_tensor',
-          'ndlstm',
           'quantization',
           'session_bundle',
           'slim',
@@ -91,25 +64,18 @@ if __name__ == '__main__':
           'training',
           'tfprof',
       ],
-      'contrib.bayesflow': [
-          'entropy', 'monte_carlo',
-          'special_math', 'stochastic_gradient_estimators',
-          'stochastic_graph', 'stochastic_tensor',
-          'stochastic_variables', 'variational_inference'
+      'tf.contrib.bayesflow': [
+          'entropy', 'monte_carlo', 'special_math',
+          'stochastic_gradient_estimators', 'stochastic_graph',
+          'stochastic_tensor', 'stochastic_variables', 'variational_inference'
       ],
-      'contrib.distributions': ['bijector'],
-      'contrib.ffmpeg': ['ffmpeg_ops'],
-      'contrib.graph_editor': [
-          'edit',
-          'match',
-          'reroute',
-          'subgraph',
-          'transform',
-          'select',
-          'util'
+      'tf.contrib.distributions': ['bijector'],
+      'tf.contrib.ffmpeg': ['ffmpeg_ops'],
+      'tf.contrib.graph_editor': [
+          'edit', 'match', 'reroute', 'subgraph', 'transform', 'select', 'util'
       ],
-      'contrib.layers': ['feature_column', 'summaries'],
-      'contrib.learn': [
+      'tf.contrib.layers': ['feature_column', 'summaries'],
+      'tf.contrib.learn': [
           'datasets',
           'head',
           'graph_actions',
@@ -120,8 +86,7 @@ if __name__ == '__main__':
           'preprocessing',
           'utils',
       ],
-      'contrib.util': ['loader'],
-  }
+      'tf.contrib.util': ['loader'],
+  })
 
-  sys.exit(generate_lib.main(
-      flags.src_dir, flags.output_dir, flags.base_dir, modules))
+  sys.exit(doc_generator.build(flags))

@@ -31,41 +31,24 @@ if [ ! -e "WORKSPACE" ]; then
   exit 1
 fi
 
-#### BEGIN HACKS TO BE RESOLVED WITH NEWER BAZEL VERSIONS ####
-# Disable nccl.
-# This can be removed once we switch to a bazel release that includes
-# https://github.com/bazelbuild/bazel/commit/8e0991cb19eadfcb651cd6987255d5f7c0a58e0a
-# (the fix for https://github.com/bazelbuild/bazel/issues/2494).
-# Most likley bazel 0.4.5 will contain that.
-sed -i -e "s/\"@nccl_archive/#\"@nccl_archive/"  ./tensorflow/contrib/nccl/BUILD
-sed -i -e "s/\"@nccl_archive/#\"@nccl_archive/"  ./tensorflow/tools/pip_package/BUILD
+export TF_BAZEL_TARGETS="//tensorflow:libtensorflow.so"
+export TF_BAZEL_TARGETS="${TF_BAZEL_TARGETS} //tensorflow/tools/lib_package:clicenses_generate"
+export TF_BAZEL_TARGETS="${TF_BAZEL_TARGETS} //tensorflow/java:libtensorflow_jni.so"
+export TF_BAZEL_TARGETS="${TF_BAZEL_TARGETS} //tensorflow/tools/lib_package:jnilicenses_generate"
 
-# Enable JNI support for Windows in Bazel.
-# This can be removed once
-# https://github.com/bazelbuild/bazel/pull/2599
-# has been merged and we switch to a bazel release containing it.
-cp "${JAVA_HOME}/include/win32/jni_md.h" "./tensorflow/java/src/main/native/windows_jni_md.h"
-sed -i -e "s|@bazel_tools//tools/jdk:jni_md_header-linux|windows_jni_md.h|" ./tensorflow/java/src/main/native/BUILD
-#### END HACKS TO BE RESOLVED WITH NEW BAZEL VERSIONS ####
-
-clean_output_base
 run_configure_for_cpu_build
 
 # build_libtensorflow_tarball in ../builds/libtensorflow.sh
 # cannot be used on Windows since it relies on pkg_tar rules.
 # So we do something special here
-bazel build -c opt ${BUILD_OPTS} \
+bazel build -c opt --copt=/arch:AVX \
   tensorflow:libtensorflow.so \
   tensorflow/tools/lib_package:clicenses_generate \
   tensorflow/java:libtensorflow_jni.so \
   tensorflow/tools/lib_package:jnilicenses_generate
 
-# Revert the hacks above
-git checkout ./tensorflow/contrib/nccl/BUILD ./tensorflow/tools/pip_package/BUILD
-git checkout ./tensorflow/java/src/main/native/BUILD
-rm -f ./tensorflow/java/src/main/native/windows_jni_md.h
-
 DIR=lib_package
+rm -rf ${DIR}
 mkdir -p ${DIR}
 
 # Zip up the .dll and the LICENSE for the JNI library.
@@ -77,13 +60,16 @@ rm -f ${DIR}/tensorflow_jni.dll
 
 # Zip up the .dll, LICENSE and include files for the C library.
 mkdir -p ${DIR}/include/tensorflow/c
+mkdir -p ${DIR}/include/tensorflow/c/eager
 mkdir -p ${DIR}/lib
 cp bazel-bin/tensorflow/libtensorflow.so ${DIR}/lib/tensorflow.dll
 cp tensorflow/c/c_api.h ${DIR}/include/tensorflow/c
+cp tensorflow/c/eager/c_api.h ${DIR}/include/tensorflow/c/eager
 cp bazel-genfiles/tensorflow/tools/lib_package/include/tensorflow/c/LICENSE ${DIR}/include/tensorflow/c
 cd ${DIR}
-zip -j libtensorflow-cpu-windows-$(uname -m).zip \
+zip libtensorflow-cpu-windows-$(uname -m).zip \
   lib/tensorflow.dll \
-  include/c/c_api.h \
-  include/c/LICENSE
+  include/tensorflow/c/eager/c_api.h \
+  include/tensorflow/c/c_api.h \
+  include/tensorflow/c/LICENSE
 rm -rf lib include

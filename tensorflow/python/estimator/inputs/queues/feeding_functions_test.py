@@ -22,13 +22,18 @@ import collections
 
 import numpy as np
 
-from tensorflow.python.estimator.inputs.pandas_import import HAS_PANDAS
 from tensorflow.python.estimator.inputs.queues import feeding_functions as ff
 from tensorflow.python.platform import test
 
-if HAS_PANDAS:
+try:
   # pylint: disable=g-import-not-at-top
   import pandas as pd
+  HAS_PANDAS = True
+except IOError:
+  # Pandas writes a temporary file during import. If it fails, don't use pandas.
+  HAS_PANDAS = False
+except ImportError:
+  HAS_PANDAS = False
 
 
 def vals_to_list(a):
@@ -284,6 +289,102 @@ class _FeedingFunctionsTestCase(test.TestCase):
     }
     actual = aff()
     self.assertEqual(expected, vals_to_list(actual))
+
+  def testFillArraySmall(self):
+    a = (np.ones(shape=[32, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[32, 36], dtype=np.int32).tolist())
+    actual = np.ones(shape=[64, 36], dtype=np.int32)
+    ff._fill_array(actual, a)
+    expected = np.ones(shape=[64, 36], dtype=np.int32)
+    expected[:32, 32:] = 0
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testFillArrayLarge(self):
+    a = (np.ones(shape=[8, 8, 8, 8, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[8, 8, 8, 8, 36], dtype=np.int32).tolist())
+    actual = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    ff._fill_array(actual, a)
+    expected = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    expected[:8, ..., 32:] = 0
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testFillArraySmallWithSpecifiedValue(self):
+    fill_value = 8
+    a = (np.ones(shape=[32, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[32, 36], dtype=np.int32).tolist())
+    actual = np.ones(shape=[64, 36], dtype=np.int32)
+    ff._fill_array(actual, a, fill_value)
+    expected = np.ones(shape=[64, 36], dtype=np.int32)
+    expected[:32, 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testFillArrayLargeWithSpecifiedValue(self):
+    fill_value = 8
+    a = (np.ones(shape=[8, 8, 8, 8, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[8, 8, 8, 8, 36], dtype=np.int32).tolist())
+    actual = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    ff._fill_array(actual, a, fill_value)
+    expected = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    expected[:8, ..., 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededSmall(self):
+    a = (np.ones(shape=[32, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[32, 36], dtype=np.int32).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a)
+    expected = np.ones(shape=[64, 36], dtype=np.int32)
+    expected[:32, 32:] = 0
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededLarge(self):
+    a = (np.ones(shape=[8, 8, 8, 8, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[8, 8, 8, 8, 36], dtype=np.int32).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a)
+    expected = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    expected[:8, ..., 32:] = 0
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededSmallWithSpecifiedValue(self):
+    fill_value = 8
+    a = (np.ones(shape=[32, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[32, 36], dtype=np.int32).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a, fill_value)
+    expected = np.ones(shape=[64, 36], dtype=np.int32)
+    expected[:32, 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededLargeWithSpecifiedValue(self):
+    fill_value = 8
+    a = (np.ones(shape=[8, 8, 8, 8, 32], dtype=np.int32).tolist() +
+         np.ones(shape=[8, 8, 8, 8, 36], dtype=np.int32).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a, fill_value)
+    expected = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.int32)
+    expected[:8, ..., 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededSmallWithSpecifiedNonNumericValue(self):
+    fill_value = False
+    a = (np.ones(shape=[32, 32], dtype=np.bool).tolist() +
+         np.ones(shape=[32, 36], dtype=np.bool).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a, fill_value)
+    expected = np.ones(shape=[64, 36], dtype=np.bool)
+    expected[:32, 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
+
+  def testPadIfNeededLargeWithSpecifiedNonNumericValue(self):
+    fill_value = False
+    a = (np.ones(shape=[8, 8, 8, 8, 32], dtype=np.bool).tolist() +
+         np.ones(shape=[8, 8, 8, 8, 36], dtype=np.bool).tolist())
+    a = list(map(np.array, a))
+    actual = ff._pad_if_needed(a, fill_value)
+    expected = np.ones(shape=[16, 8, 8, 8, 36], dtype=np.bool)
+    expected[:8, ..., 32:] = fill_value
+    self.assertEqual(expected.tolist(), actual.tolist())
 
 
 if __name__ == "__main__":

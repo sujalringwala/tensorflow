@@ -32,6 +32,7 @@ HELP_INDENT = "  "
 
 EXPLICIT_USER_EXIT = "explicit_user_exit"
 REGEX_MATCH_LINES_KEY = "regex_match_lines"
+INIT_SCROLL_POS_KEY = "init_scroll_pos"
 
 MAIN_MENU_KEY = "mm:"
 
@@ -104,12 +105,16 @@ class RichLine(object):
     else:
       raise TypeError("%r cannot be concatenated with a RichLine" % other)
 
+  def __len__(self):
+    return len(self.text)
 
-def rich_text_lines_from_rich_line_list(rich_text_list):
+
+def rich_text_lines_from_rich_line_list(rich_text_list, annotations=None):
   """Convert a list of RichLine objects or strings to a RichTextLines object.
 
   Args:
     rich_text_list: a list of RichLine objects or strings
+    annotations: annotatoins for the resultant RichTextLines object.
 
   Returns:
     A corresponding RichTextLines object.
@@ -123,7 +128,7 @@ def rich_text_lines_from_rich_line_list(rich_text_list):
         font_attr_segs[i] = rl.font_attr_segs
     else:
       lines.append(rl)
-  return RichTextLines(lines, font_attr_segs)
+  return RichTextLines(lines, font_attr_segs, annotations=annotations)
 
 
 class RichTextLines(object):
@@ -172,7 +177,7 @@ class RichTextLines(object):
     """
     if isinstance(lines, list):
       self._lines = lines
-    elif isinstance(lines, str):
+    elif isinstance(lines, six.string_types):
       self._lines = [lines]
     else:
       raise ValueError("Unexpected type in lines: %s" % type(lines))
@@ -603,7 +608,7 @@ class CommandHandlerRegistry(object):
       raise ValueError("handler is not callable")
 
     # Make sure that help info is a string.
-    if not isinstance(help_info, str):
+    if not isinstance(help_info, six.string_types):
       raise ValueError("help_info is not a str")
 
     # Process prefix aliases.
@@ -645,7 +650,7 @@ class CommandHandlerRegistry(object):
         3) the handler is found for the prefix, but it fails to return a
           RichTextLines or raise any exception.
       CommandLineExit:
-        If the command handler raises this type of exception, tihs method will
+        If the command handler raises this type of exception, this method will
         simply pass it along.
     """
     if not prefix:
@@ -835,7 +840,7 @@ class TabCompletionRegistry(object):
 
     Args:
       context_words: A list of context words belonging to the context being
-        registerd. It is a list of str, instead of a single string, to support
+        registered. It is a list of str, instead of a single string, to support
         synonym words triggering the same tab-completion context, e.g.,
         both "drink" and the short-hand "dr" can trigger the same context.
       comp_items: A list of completion items, as a list of str.
@@ -1028,7 +1033,7 @@ class CommandHistory(object):
       # Ignore repeating commands in a row.
       return
 
-    if not isinstance(command, str):
+    if not isinstance(command, six.string_types):
       raise TypeError("Attempt to enter non-str entry to command history")
 
     self._commands.append(command)

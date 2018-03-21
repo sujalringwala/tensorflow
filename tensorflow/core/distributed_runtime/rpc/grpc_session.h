@@ -13,8 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#ifndef THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_
-#define THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_
+#ifndef TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_
+#define TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_
 
 #include <memory>
 #include <string>
@@ -94,7 +94,7 @@ class GrpcSession : public Session {
       const std::vector<string>& output_names,
       std::vector<Tensor>* outputs) override;
 
-  std::vector<DeviceAttributes> ListDevices();
+  Status ListDevices(std::vector<DeviceAttributes>* response) override;
 
  protected:
   // Takes ownership of `*master`.
@@ -130,4 +130,4 @@ class GrpcSession : public Session {
 
 }  // namespace tensorflow
 
-#endif  // THIRD_PARTY_TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_
+#endif  // TENSORFLOW_CORE_DISTRIBUTED_RUNTIME_RPC_GRPC_SESSION_H_

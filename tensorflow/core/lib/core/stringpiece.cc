@@ -17,13 +17,8 @@ limitations under the License.
 
 #include <algorithm>
 #include <iostream>
-#include "tensorflow/core/lib/hash/hash.h"
 
 namespace tensorflow {
-
-size_t StringPiece::Hasher::operator()(StringPiece s) const {
-  return Hash64(s.data(), s.size());
-}
 
 std::ostream& operator<<(std::ostream& o, StringPiece piece) {
   o.write(piece.data(), piece.size());
@@ -40,7 +35,7 @@ size_t StringPiece::find(char c, size_t pos) const {
   }
   const char* result =
       reinterpret_cast<const char*>(memchr(data_ + pos, c, size_ - pos));
-  return result != NULL ? result - data_ : npos;
+  return result != nullptr ? result - data_ : npos;
 }
 
 // Search range is [0..pos] inclusive.  If pos == npos, search everything.

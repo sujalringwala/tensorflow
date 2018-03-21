@@ -19,15 +19,12 @@ limitations under the License.
 
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/threadpool.h"
-#include "tensorflow/core/lib/gtl/map_util.h"
-#include "tensorflow/core/lib/gtl/stl_util.h"
 #include "tensorflow/core/lib/io/path.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/lib/strings/strcat.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/file_system.h"
 #include "tensorflow/core/platform/platform.h"
-#include "tensorflow/core/platform/protobuf.h"
 
 namespace tensorflow {
 
@@ -37,7 +34,7 @@ constexpr int kNumThreads = 8;
 
 // Run a function in parallel using a ThreadPool, but skip the ThreadPool
 // on the iOS platform due to its problems with more than a few threads.
-void ForEach(int first, int last, std::function<void(int)> f) {
+void ForEach(int first, int last, const std::function<void(int)>& f) {
 #if TARGET_OS_IPHONE
   for (int i = first; i < last; i++) {
     f(i);
@@ -56,6 +53,9 @@ void ForEach(int first, int last, std::function<void(int)> f) {
 FileSystem::~FileSystem() {}
 
 string FileSystem::TranslateName(const string& name) const {
+  // If the name is empty, CleanPath returns "." which is incorrect and
+  // we should return the empty path instead.
+  if (name.empty()) return name;
   return io::CleanPath(name);
 }
 
@@ -70,11 +70,29 @@ Status FileSystem::IsDirectory(const string& name) {
   return Status(tensorflow::error::FAILED_PRECONDITION, "Not a directory");
 }
 
+void FileSystem::FlushCaches() {}
+
 RandomAccessFile::~RandomAccessFile() {}
 
 WritableFile::~WritableFile() {}
 
 FileSystemRegistry::~FileSystemRegistry() {}
+
+bool FileSystem::FilesExist(const std::vector<string>& files,
+                            std::vector<Status>* status) {
+  bool result = true;
+  for (const auto& file : files) {
+    Status s = FileExists(file);
+    result &= s.ok();
+    if (status != nullptr) {
+      status->push_back(s);
+    } else if (!result) {
+      // Return early since there is no need to check other files.
+      return false;
+    }
+  }
+  return result;
+}
 
 Status FileSystem::GetMatchingPaths(const string& pattern,
                                     std::vector<string>* results) {
@@ -110,18 +128,19 @@ Status FileSystem::GetMatchingPaths(const string& pattern,
     if (children.empty()) continue;
     // This IsDirectory call can be expensive for some FS. Parallelizing it.
     children_dir_status.resize(children.size());
-    ForEach(0, children.size(), [this, &current_dir, &children, &fixed_prefix,
-                                 &children_dir_status](int i) {
-      const string child_path = io::JoinPath(current_dir, children[i]);
-      // In case the child_path doesn't start with the fixed_prefix then
-      // we don't need to explore this path.
-      if (!StringPiece(child_path).starts_with(fixed_prefix)) {
-        children_dir_status[i] =
-            Status(tensorflow::error::CANCELLED, "Operation not needed");
-      } else {
-        children_dir_status[i] = IsDirectory(child_path);
-      }
-    });
+    ForEach(0, children.size(),
+            [this, &current_dir, &children, &fixed_prefix,
+             &children_dir_status](int i) {
+              const string child_path = io::JoinPath(current_dir, children[i]);
+              // In case the child_path doesn't start with the fixed_prefix then
+              // we don't need to explore this path.
+              if (!StringPiece(child_path).starts_with(fixed_prefix)) {
+                children_dir_status[i] = Status(tensorflow::error::CANCELLED,
+                                                "Operation not needed");
+              } else {
+                children_dir_status[i] = IsDirectory(child_path);
+              }
+            });
     for (int i = 0; i < children.size(); ++i) {
       const string child_path = io::JoinPath(current_dir, children[i]);
       // If the IsDirectory call was cancelled we bail.
@@ -241,6 +260,10 @@ Status FileSystem::RecursivelyCreateDir(const string& dirname) {
     }
   }
   return Status::OK();
+}
+
+Status FileSystem::CopyFile(const string& src, const string& target) {
+  return FileSystemCopyFile(this, src, this, target);
 }
 
 }  // namespace tensorflow

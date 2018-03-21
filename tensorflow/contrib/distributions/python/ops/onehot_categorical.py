@@ -18,9 +18,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from tensorflow.contrib.distributions.python.ops import distribution
-from tensorflow.contrib.distributions.python.ops import distribution_util
-from tensorflow.contrib.distributions.python.ops import kullback_leibler
 from tensorflow.python.framework import dtypes
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
@@ -29,6 +26,9 @@ from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn_ops
 from tensorflow.python.ops import random_ops
+from tensorflow.python.ops.distributions import distribution
+from tensorflow.python.ops.distributions import kullback_leibler
+from tensorflow.python.ops.distributions import util as distribution_util
 
 
 class OneHotCategorical(distribution.Distribution):
@@ -116,7 +116,7 @@ class OneHotCategorical(distribution.Distribution):
       name: Python `str` name prefixed to Ops created by this class.
     """
     parameters = locals()
-    with ops.name_scope(name, values=[logits, probs]) as ns:
+    with ops.name_scope(name, values=[logits, probs]):
       self._logits, self._probs = distribution_util.get_logits_and_probs(
           name=name, logits=logits, probs=probs, validate_args=validate_args,
           multidimensional=True)
@@ -142,7 +142,7 @@ class OneHotCategorical(distribution.Distribution):
         parameters=parameters,
         graph_parents=[self._logits,
                        self._probs],
-        name=ns)
+        name=name)
 
   @property
   def event_size(self):
@@ -202,9 +202,6 @@ class OneHotCategorical(distribution.Distribution):
     # Reshape back to user-supplied batch and sample dims prior to 2D reshape.
     ret = array_ops.reshape(ret, logits_shape)
     return ret
-
-  def _prob(self, x):
-    return math_ops.exp(self._log_prob(x))
 
   def _entropy(self):
     return -math_ops.reduce_sum(
